@@ -12,7 +12,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import classification_report
 from sklearn.svm import SVC
-from sklearn.preprocessing import normalize
+from sklearn.preprocessing import normalize, StandardScaler
 from sklearn import preprocessing 
 from sklearn.linear_model import Perceptron
 from sklearn.neighbors import KNeighborsClassifier
@@ -28,6 +28,17 @@ from sklearn.externals import joblib
 from sklearn.metrics import precision_recall_fscore_support as score
 from sklearn.model_selection import StratifiedKFold
 from sklearn.pipeline import make_pipeline
+from sklearn.feature_selection import SelectKBest, chi2
+
+global_dict = {
+        'precision': [],
+        'recall': [],
+        'f1-score': []
+}
+
+def get_average(y_true, y_pred):
+    a1, a2, a3, a4 = score(y_true, y_pred, average='weighted')
+    global_dict['precision'], global_dict['recall'], global_dict['f1-score'] = a1, a2, a3
 
 class MultiColumnLabelEncoder:
     def __init__(self,columns = None):
@@ -54,7 +65,7 @@ class MultiColumnLabelEncoder:
     def fit_transform(self,X,y=None):
         return self.fit(X,y).transform(X)
 
-def preprocess(filename, train):
+def preprocess(filename):
     print("Pre-processing sensor data...")
     scam_data = pd.read_csv(filename, header = 0)
     # Feature Selection: All features are relevant.
@@ -62,24 +73,34 @@ def preprocess(filename, train):
     col_list = ["IRS Status","Tax related", "tax confidence", "arrest" , "prison", "privacy (Identity) threat",
                    "privacy (bank) threat","amount requested",
                    "payment methods", "scam signals", "court mentioned","urgency index"]
-    features = df[col_list]
+    # K-Best Features
+    # See report to see why k = 130 was set.
     target = df[["scam"]]
-   
+    features = df[col_list]
     features = MultiColumnLabelEncoder(columns = col_list).fit_transform(features)
+#    
+#    selector = SelectKBest(chi2)
+#    features  = selector.fit_transform(features, target)
+#    idxs_selected = selector.get_support(indices=True)
+#    # Create new dataframe with only desired columns, or overwrite existing
+#    col_names = pd.DataFrame(df.columns[idxs_selected])
+#    features = pd.DataFrame(features)
+#    features.columns = col_names
 
     # normailise data
-    features = normalize(features, norm='l2')
+    #features = normalize(features, norm='l2')
     
-    dict = {'features':features, 'labels': target}
+    dict = {'features':features.values, 'labels': target.values}
     return dict
 
 def train_model(currentClassifier, filename):
-    results = preprocess(filename, True)
-    sss = StratifiedKFold(n_splits = 3, random_state = None)
+    results = preprocess(filename)
+    sss = StratifiedKFold(n_splits = 5, random_state = None, shuffle = False)
     features, labels = results['features'], results['labels'] 
     average_accuracy = list()
     for train_index, test_index in sss.split(features, labels):
-        X_train, X_test, y_train, y_test = features[train_index], features[test_index], labels[train_index], labels[test_index]
+        X_train, X_test = features[train_index], features[test_index]
+        y_train, y_test = labels[train_index], labels[test_index]
         classifierDict = {"Decision Tree": [DecisionTreeClassifier(), {'max_leaf_nodes': list(range(2, 100)), 'min_samples_split': range(2, 20)}],
                            "KNN": [KNeighborsClassifier(), 
                                    {'n_neighbors': [1, 2 , 4 , 8], 'weights': ['uniform']}],
@@ -95,8 +116,6 @@ def train_model(currentClassifier, filename):
         print("Applying ", currentClassifier, " Please wait...")
         if currentClassifier == "Naive Bayes":
             clf = GaussianNB()
-            #clf = make_pipeline(StandardScaler(),GaussianNB())
-            # what is the impact of scaling on the NB classifier?
             clf.fit(X_train, y_train)
         else:
             clf =  make_pipeline(StandardScaler(),
@@ -118,10 +137,10 @@ def train_model(currentClassifier, filename):
         get_average(y_true, y_pred)
         print("Completed!")
     
-    model_file = 'occupancy_model_' + currentClassifier + '.pkl'
+    model_file = 'scam_' + currentClassifier + '.pkl'
     joblib.dump(clf, model_file) 
     print("Model saved to file", model_file)
-    
+    print(clf)
     print("Training average of ", currentClassifier, "is: ", np.mean(average_accuracy))
     
 def predict(currentClassifier, filename_predict):
@@ -137,5 +156,45 @@ def predict(currentClassifier, filename_predict):
 if __name__ == "__main__":
     classifier = "Naive Bayes"
     file = "call_data.csv"
-    train_model("KNN", file)
+    train_model(classifier, file)
     #predict(classifier, file)
+
+def plot_results():
+    import numpy as np
+    import matplotlib.pyplot as plt
+     
+    # data to plot
+    n_groups = 6
+    precision = (0.367, 0.213, 0.35, 0.433, 0.487, 0.417)
+    recall = (0.46, 0.356, 0.436, 0.462, 0.513, 0.462)
+    f1_score = (0.396, 0.313, 0.38, 0.427, 0.457, 0.433)
+     
+    # create plot
+    fig, ax = plt.subplots()
+    index = np.arange(n_groups)
+    bar_width = 0.25
+    opacity = 0.8
+     
+    rects1 = plt.bar(index - bar_width, precision, bar_width,
+                     alpha=opacity,
+                     color='b',
+                     label='Precision')
+     
+    rects2 = plt.bar(index, recall, bar_width,
+                     alpha=opacity,
+                     color='g',
+                     label='Recall')
+    
+    rects3 = plt.bar(index + bar_width, f1_score, bar_width,
+                     alpha=opacity,
+                     color='r',
+                     label='f1-score')
+    
+    plt.xlabel('Classifier Type')
+    plt.ylabel('Scores')
+    plt.title('Performance Comparison of Classifiers')
+    plt.xticks(index, ('SVM', 'Decision Tree', 'KNN', 'Perceptron', 'MLP', 'Naive Bayes'))
+    plt.legend()
+     
+    plt.tight_layout()
+    plt.show()  
