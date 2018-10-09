@@ -31,6 +31,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.feature_selection import SelectKBest, chi2
 from sklearn.ensemble import RandomForestClassifier
 
+# Classifier dictionary
 classifier_dict = {
     'Decision Tree' : [],
     'Naive Bayes': [],
@@ -41,12 +42,14 @@ classifier_dict = {
     'Random Forest': []
 }
 
+# Dictionary for precision, recall and f1-scores for the different classifiers
 global_dict = {
         'precision': [],
         'recall': [],
         'f1-score': []
 }
 
+# Dictionary for hyperparameter tuning
 gridsearch_params_dict = {
     'Decision Tree' : [],
     'Naive Bayes': [],
@@ -57,12 +60,16 @@ gridsearch_params_dict = {
     'Random Forest': []
 }
 
+# A funtion to get the precision, recall and f1-score for a particular classifier 
 def get_average(y_true, y_pred):
     a1, a2, a3, a4 = score(y_true, y_pred, average='weighted')
     global_dict['precision'].append(a1) 
     global_dict['recall'].append(a2) 
     global_dict['f1-score'].append(a3)
 
+# *prepareToGraph
+# A function to add the precision, recall and f1-scores to the current classifier dictionary entry.
+# This is required for graphing purposes.
 def prepateToGraph(currentClassifier):
     global global_dict
     classifier_dict[currentClassifier].append(global_dict)
@@ -72,9 +79,8 @@ def prepateToGraph(currentClassifier):
         'recall': [],
         'f1-score': []
     }
-
     
-
+# A class to one-hot encode all the features in the call corpus feature set
 class MultiColumnLabelEncoder:
     def __init__(self,columns = None):
         self.columns = columns # array of column names to encode
@@ -100,6 +106,7 @@ class MultiColumnLabelEncoder:
     def fit_transform(self,X,y=None):
         return self.fit(X,y).transform(X)
 
+# A function to plot the scores for each classifier as a multi-bar graph     
 def plot_results(classifierList):
     import numpy as np
     import matplotlib.pyplot as plt
@@ -117,7 +124,6 @@ def plot_results(classifierList):
     n_groups = len(precision)
      
     # create plot
-    
     fig, ax = plt.subplots()
     fig.set_size_inches(18.5, 10.5)
     index = np.arange(n_groups)
@@ -145,41 +151,33 @@ def plot_results(classifierList):
     plt.xticks(index, ('SVM', 'Decision Tree', 'KNN', 'Perceptron', 'MLP', 'Naive Bayes', 'Random Forest'))
     plt.ylim(0.0, 1.0)
     plt.yticks(np.arange(0, 1.1, step=0.1))
-    plt.legend()
-    #TODO: 
+    plt.legend() 
     ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
     plt.tight_layout()
     plt.show()  
 
-
+# Preprocess the dataset before using it to calculate scores 
 def preprocess(filename):
     print("Pre-processing sensor data...")
     scam_data = pd.read_csv(filename, header = 0)
+    
     # Feature Selection: All features are relevant.
     df = pd.DataFrame(scam_data)
     col_list = ["IRS Status","Tax related", "tax confidence", "arrest" , "prison", "privacy (Identity) threat",
                    "privacy (bank) threat","amount requested",
                    "payment methods", "scam signals", "court mentioned","urgency index"]
-    # K-Best Features
-    # See report to see why k = 130 was set.
+
     target = df[["scam"]]
     features = df[col_list]
     features = MultiColumnLabelEncoder(columns = col_list).fit_transform(features)
-#    
-#    selector = SelectKBest(chi2)
-#    features  = selector.fit_transform(features, target)
-#    idxs_selected = selector.get_support(indices=True)
-#    # Create new dataframe with only desired columns, or overwrite existing
-#    col_names = pd.DataFrame(df.columns[idxs_selected])
-#    features = pd.DataFrame(features)
-#    features.columns = col_names
 
-    # normailise data
+    # normalise data
     features = normalize(features, norm='l2')
     
     dict = {'features':features, 'labels': target.values}
     return dict
 
+# A function to train the model for the current classifier (after preprocessing)
 def train_model(currentClassifier, filename):
     results = preprocess(filename)
     sss = StratifiedKFold(n_splits = 5, random_state = None, shuffle = False)
@@ -238,7 +236,8 @@ def train_model(currentClassifier, filename):
         prepateToGraph(currentClassifier)
     
     plot_results(classifierList)
-    
+
+# A function to use the classifier to predict on a test file    
 def predict(currentClassifier, filename_predict):
     print("Making Predictions...")
     results = preprocessing(filename_predict, False)
@@ -253,5 +252,3 @@ if __name__ == "__main__":
     classifier = "Naive Bayes"
     file = "call_data.csv"
     train_model(classifier, file)
-    #predict(classifier, file)
-
