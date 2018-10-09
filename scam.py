@@ -47,6 +47,16 @@ global_dict = {
         'f1-score': []
 }
 
+gridsearch_params_dict = {
+    'Decision Tree' : [],
+    'Naive Bayes': [],
+    'KNN' : [],
+    'SVM': [],
+    'Perceptron': [],
+    'Multi-Layer Perceptron': [],
+    'Random Forest': []
+}
+
 def get_average(y_true, y_pred):
     a1, a2, a3, a4 = score(y_true, y_pred, average='weighted')
     global_dict['precision'].append(a1) 
@@ -93,6 +103,7 @@ class MultiColumnLabelEncoder:
 def plot_results(classifierList):
     import numpy as np
     import matplotlib.pyplot as plt
+    from matplotlib.pyplot import figure
     
     precision = []
     recall = []
@@ -106,7 +117,9 @@ def plot_results(classifierList):
     n_groups = len(precision)
      
     # create plot
+    
     fig, ax = plt.subplots()
+    fig.set_size_inches(18.5, 10.5)
     index = np.arange(n_groups)
     bar_width = 0.25
     opacity = 0.8
@@ -134,7 +147,7 @@ def plot_results(classifierList):
     plt.yticks(np.arange(0, 1.1, step=0.1))
     plt.legend()
     #TODO: 
-    #ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
     plt.tight_layout()
     plt.show()  
 
@@ -196,10 +209,12 @@ def train_model(currentClassifier, filename):
                 clf = GaussianNB()
                 clf.fit(X_train, y_train)
             else:
+                gridsearch = GridSearchCV(classifierDict[currentClassifier][0], 
+                                     classifierDict[currentClassifier][1], refit = 'AUC', cv = sss)
                 clf =  make_pipeline(StandardScaler(),
-                                     GridSearchCV(classifierDict[currentClassifier][0], 
-                                     classifierDict[currentClassifier][1], refit = 'AUC', cv = sss))
-                clf.fit(X_train, y_train)    
+                                     gridsearch)
+                clf.fit(X_train, y_train) 
+                gridsearch_params_dict[currentClassifier].append(gridsearch.best_params_)
             print()
             print("Grid scores on development set:")
             print()
